@@ -157,7 +157,7 @@ def build_training_graph(hypes, modules):
     loss = objective.loss(hypes, decoder['train'], label_batch['train'])
 
     # Add to the Graph the Ops that calculate and apply gradients.
-    train_op = solver.training(hypes, loss, global_step=global_step)
+    train_op = solver.training(hypes, loss[0], global_step=global_step)
 
     # Add the Op to compare the logits to the labels during evaluation.
     if hasattr(objective, 'evaluation'):
@@ -310,12 +310,16 @@ def run_training_step(hypes, step, start_time, graph_ops, sess_coll,
     q, train_op, loss, eval_dict = graph_ops
 
     # Run the training Step
-    _, loss_value = sess.run([train_op, loss])
+    _, loss_value = sess.run([train_op, loss[0]])
 
     # Write the summaries and print an overview fairly often.
     if step % int(utils.cfg.step_show) == 0:
         # Print status to stdout.
         _print_training_status(hypes, step, loss_value, start_time, sess_coll)
+        losses = [lt for lt in loss]
+        losses_np = sess.run(loss)
+        logging.info("Total_loss: % 0.04f, cross_entropy_mean: % 0.04f,"
+                     "coord_loss_mean: % 0.04f,  dim_loss_mean: % 0.04f")
         # Reset timer
         start_time = time.time()
 
