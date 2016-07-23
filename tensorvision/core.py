@@ -158,9 +158,9 @@ def build_inference_graph(hypes, modules, image, label):
 
     decoder = objective.decoder(hypes, logits)
 
-    softmax_layer = _add_softmax(hypes, decoder)
+    # softmax_layer = _add_softmax(hypes, decoder)
 
-    return softmax_layer
+    return decoder
 
 
 def start_tv_session(hypes):
