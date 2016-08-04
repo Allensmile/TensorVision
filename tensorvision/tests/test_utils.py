@@ -87,3 +87,18 @@ def test_load_segmentation_mask():
     true_gt = (scipy.misc.imread(seg_image) / 255.).astype(int)
     numpy.testing.assert_array_equal(true_gt, gt)
     assert gt.shape == (480, 640)
+
+
+def test_make_paths_absolute():
+    """Test if making paths absolute works."""
+    from tensorvision.utils import _make_paths_absolute
+    hypes = {'a': '../whatever/is/here',
+             'b_path': '../a/relative/path.json',
+             'c': {'d': {'e_path': '/abs/already',
+                         'f_path': '../fuuu/nested/relative'}}}
+    hypes_abs = {'a': '../whatever/is/here',
+                 'b_path': '/home/moose/a/relative/path.json',
+                 'c': {'d': {'e_path': '/abs/already',
+                             'f_path': '/home/moose/fuuu/nested/relative'}}}
+    abspath = '/home/moose/here'
+    assert _make_paths_absolute(hypes, abspath) == hypes_abs

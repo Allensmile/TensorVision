@@ -217,6 +217,86 @@ def load_hypes_from_logdir(logdir):
     return hypes
 
 
+def load_hypes(hypes_file_path, flags=None):
+    """
+    Load the hyperparameters.
+
+    Parameters
+    ----------
+    hypes_file_path : str or None
+        Path to a JSON file.
+    flags : object or None
+        Command line parameter object
+
+    Returns
+    -------
+    dict
+        All hyperparameters
+    """
+    hypes = {}
+
+    # 1. Load default parameters
+    # TODO
+
+    # 2. Load environment variables
+    for env_key in ['TV_IS_DEV', 'TV_SAVE', 'TV_USE_GPUS',
+                    'CUDA_VISIBLE_DEVICES']:
+        if env_key in os.environ:
+            hypes['tensorvision'][env_key] = os.environ[env_key]
+        elif env_key not in hypes['tensorvision']:
+            # set the default to empty string to make comparisons easier
+            hypes['tensorvision'][env_key] = ''
+
+    # 3. Load command line parameters
+    # TODO: use flags
+
+    # 4. Load hypes
+    if flags.hypes is None and hypes_file_path is None:
+        logging.error("No hypes are given.")
+        logging.error("Usage: tv-train --hypes hypes.json")
+        exit(1)
+    elif flags.hypes is not None:
+        hypes_file_path = flags.hypes
+
+    with open(hypes_file_path, 'r') as f:
+        logging.info("Hypes file loaded: %s", f)
+        hypes_t = json.load(f)
+    hypes.update(hypes_t)
+
+    # Handle relative paths
+    hypes_dir_path = os.path.dirname(os.path.abspath(hypes_file_path))
+    hypes = _make_paths_absolute(hypes, hypes_dir_path)
+
+    return hypes
+
+
+def _make_paths_absolute(hypes, hypes_dir_path):
+    """
+    Make all keys in hypes which end with '_path' absolute.
+
+    This takes hypes_path as a base path.
+
+    Parameters
+    ----------
+    hypes : dict
+    hypes_dir_path : str
+        Absolute path to the directory of the hypes.json file.
+
+    Returns
+    -------
+    dict
+        Hypes with adjusted paths
+    """
+    for key in hypes:
+        if isinstance(hypes[key], dict):
+            hypes[key] = _make_paths_absolute(hypes[key], hypes_dir_path)
+        elif (isinstance(hypes[key], basestring) and
+              key.endswith('_path') and not os.path.isabs(hypes[key])):
+            hypes[key] = os.path.join(hypes_dir_path, hypes[key])
+            hypes[key] = os.path.abspath(hypes[key])
+    return hypes
+
+
 def create_filewrite_handler(logging_file, mode='w'):
     """
     Create a filewriter handler.

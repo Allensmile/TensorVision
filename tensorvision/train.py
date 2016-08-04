@@ -464,14 +464,7 @@ def continue_training(logdir):
 
 def main(_):
     """Run main function."""
-    if FLAGS.hypes is None:
-        logging.error("No hypes are given.")
-        logging.error("Usage: tv-train --hypes hypes.json")
-        exit(1)
-
-    with open(tf.app.flags.FLAGS.hypes, 'r') as f:
-        logging.info("f: %s", f)
-        hypes = json.load(f)
+    hypes = utils.load_hypes(None, FLAGS)
 
     utils.set_gpus_to_use()
     utils.load_plugins()

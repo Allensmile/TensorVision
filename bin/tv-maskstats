@@ -31,8 +31,7 @@ else:
 def main(hypes_file):
     """Orchestrate the analyzation of the data sets masks."""
     hypes_base_path = os.path.dirname(os.path.realpath(hypes_file))
-    with open(hypes_file, 'r') as f:
-        hypes = json.load(f)
+    hypes = utils.load_hypes(hypes_file)
 
     if 'data' not in hypes:
         logging.error("%s does not have a 'data' entry.", hypes_file)
