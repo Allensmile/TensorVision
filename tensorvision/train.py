@@ -137,6 +137,7 @@ def build_training_graph(hypes, modules):
     data_input, arch, objective, solver = modules
 
     global_step = tf.Variable(0.0, trainable=False)
+    learning_rate = tf.placeholder(tf.float32)
 
     q, logits, decoder, = {}, {}, {}
     image_batch, label_batch = {}, {}
@@ -157,7 +158,16 @@ def build_training_graph(hypes, modules):
     loss = objective.loss(hypes, decoder['train'], label_batch['train'])
 
     # Add to the Graph the Ops that calculate and apply gradients.
-    train_op = solver.training(hypes, loss, global_step=global_step)
+    try:
+        train_op = solver.training(hypes, loss,
+                                   global_step=global_step,
+                                   learning_rate=learning_rate)
+    except TypeError:
+        train_op = solver.training(hypes, loss,
+                                   global_step=global_step)
+        logging.warning("The training function of the solver module"
+                        "should accept a learning rate as parameter."
+                        "This will result in a crash in feature Version.")
 
     # Add the Op to compare the logits to the labels during evaluation.
     if hasattr(objective, 'evaluation'):
@@ -182,7 +192,7 @@ def build_training_graph(hypes, modules):
             eval_lists['val'] = objective.evaluation(hypes, decoder['val'],
                                                      label_batch['val'])
 
-    return q, train_op, loss, eval_lists
+    return q, train_op, loss, eval_lists, learning_rate
 
 
 def maybe_download_and_extract(hypes):
@@ -303,14 +313,23 @@ def _do_python_evaluation(hypes, step, sess_coll, objective,
 
 
 def run_training_step(hypes, step, start_time, graph_ops, sess_coll,
-                      objective, image_pl, softmax):
+                      modules, image_pl, softmax):
     """Run one iteration of training."""
     # Unpack operations for later use
     sess = sess_coll[0]
-    q, train_op, loss, eval_dict = graph_ops
+    q, train_op, loss, eval_dict, learning_rate = graph_ops
+    data_input, arch, objective, solver = modules
+
+    if hasattr(solver, 'get_learning_rate'):
+        lr = solver.get_learning_rate(hypes, step)
+        feed_dict = {learning_rate: lr}
+    else:
+        feed_dict = None
+        logging.warning("The solver defined in solver_file should"
+                        " implement a function get_learning_rate.")
 
     # Run the training Step
-    _, loss_value = sess.run([train_op, loss])
+    _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
 
     # Write the summaries and print an overview fairly often.
     if step % int(utils.cfg.step_show) == 0:
@@ -395,7 +414,7 @@ def do_training(hypes):
         start_time = time.time()
         for step in xrange(hypes['solver']['max_steps']):
             start_time = run_training_step(hypes, step, start_time,
-                                           graph_ops, sess_coll, objective,
+                                           graph_ops, sess_coll, modules,
                                            image_pl, softmax)
             if hasattr(solver, 'update_learning_rate'):
                 solver.update_learning_rate(hypes, step)
