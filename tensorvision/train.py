@@ -71,10 +71,10 @@ def _start_enqueuing_threads(hypes, q, sess, data_input):
     data_input: data_input
     """
     with tf.name_scope('data_load'):
-            data_input.start_enqueuing_threads(hypes, q['train'], 'train',
-                                               sess, hypes['dirs']['data_dir'])
-            data_input.start_enqueuing_threads(hypes, q['val'], 'val', sess,
-                                               hypes['dirs']['data_dir'])
+            data_input.start_enqueuing_threads(hypes=hypes, q=q['train'],
+                                               phase='train', sess=sess)
+            data_input.start_enqueuing_threads(hypes=hypes, q=q['train'],
+                                               phase='train', sess=sess)
 
 
 def initialize_training_folder(hypes):
