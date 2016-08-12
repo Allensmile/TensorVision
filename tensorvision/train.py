@@ -145,8 +145,8 @@ def build_training_graph(hypes, modules):
     # Add Input Producers to the Graph
     with tf.name_scope('Input'):
         q['train'] = data_input.create_queues(hypes, 'train')
-        input_batch = data_input.inputs(hypes, q['train'], 'train',
-                                        hypes['dirs']['data_dir'])
+        input_batch = data_input.inputs(hypes=hypes, q=q['train'],
+                                        phase='train')
         image_batch['train'], label_batch['train'] = input_batch
 
     logits['train'] = arch.inference(hypes, image_batch['train'], 'train')
@@ -168,8 +168,8 @@ def build_training_graph(hypes, modules):
     with tf.name_scope('Validation'):
         with tf.name_scope('Input'):
             q['val'] = data_input.create_queues(hypes, 'val')
-            input_batch = data_input.inputs(hypes, q['val'], 'val',
-                                            hypes['dirs']['data_dir'])
+            input_batch = data_input.inputs(hypes=hypes, q=q['train'],
+                                            phase='train')
             image_batch['val'], label_batch['val'] = input_batch
 
             tf.get_variable_scope().reuse_variables()
