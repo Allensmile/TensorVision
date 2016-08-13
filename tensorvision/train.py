@@ -168,8 +168,8 @@ def build_training_graph(hypes, modules):
     with tf.name_scope('Validation'):
         with tf.name_scope('Input'):
             q['val'] = data_input.create_queues(hypes, 'val')
-            input_batch = data_input.inputs(hypes=hypes, q=q['train'],
-                                            phase='train')
+            input_batch = data_input.inputs(hypes=hypes, q=q['val'],
+                                            phase='val')
             image_batch['val'], label_batch['val'] = input_batch
 
             tf.get_variable_scope().reuse_variables()
