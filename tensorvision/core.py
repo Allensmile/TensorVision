@@ -79,7 +79,7 @@ def build_graph(hypes, modules, train=True):
 
         logits['train'] = arch.inference(hypes, image_batch['train'], 'train')
 
-        decoder['train'] = objective.decoder(hypes, logits['train'])
+        decoder['train'] = objective.decoder(hypes, logits['train'], 'train')
 
         # Add to the Graph the Ops for loss calculation.
         loss = objective.loss(hypes, decoder['train'], label_batch['train'])
@@ -111,7 +111,7 @@ def build_graph(hypes, modules, train=True):
 
         logits['val'] = arch.inference(hypes, image_batch['val'], 'val')
 
-        decoder['val'] = objective.decoder(hypes, logits['val'])
+        decoder['val'] = objective.decoder(hypes, logits['val'], 'val')
 
         eval_lists['val'] = objective.evaluation(hypes, decoder['val'],
                                                  label_batch['val'])
