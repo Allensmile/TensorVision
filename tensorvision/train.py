@@ -151,7 +151,8 @@ def build_training_graph(hypes, modules):
                                         hypes['dirs']['data_dir'])
         image_batch['train'], label_batch['train'] = input_batch
 
-    logits['train'] = arch.inference(hypes, image_batch['train'], 'train')
+    logits['train'] = arch.inference(hypes, image_batch['train'],
+                                     train=True)
 
     decoder['train'] = objective.decoder(hypes, logits['train'])
 
@@ -178,7 +179,8 @@ def build_training_graph(hypes, modules):
 
             tf.get_variable_scope().reuse_variables()
 
-        logits['val'] = arch.inference(hypes, image_batch['val'], 'val')
+        logits['val'] = arch.inference(hypes, image_batch['val'],
+                                       train=False)
 
         decoder['val'] = objective.decoder(hypes, logits['val'])
 
