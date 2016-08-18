@@ -470,7 +470,7 @@ def continue_training(logdir):
         start_time = time.time()
         for step in xrange(cur_step+1, hypes['solver']['max_steps']):
             start_time = run_training_step(hypes, step, start_time,
-                                           graph_ops, sess_coll, objective,
+                                           graph_ops, sess_coll, modules,
                                            image_pl, softmax)
 
         # stopping input Threads
