@@ -112,47 +112,6 @@ def maybe_download_and_extract(hypes):
         data_input.maybe_download_and_extract(hypes, hypes['dirs']['data_dir'])
 
 
-def _write_evaluation_to_summary(evaluation_results, summary_writer, phase,
-                                 global_step, sess):
-    """
-    Write the evaluation_results to the summary file.
-
-    Parameters
-    ----------
-    evaluation_results : tuple
-        The output of do_eval
-    summary_writer : tf.train.SummaryWriter
-    phase : string
-        Name of Operation to write
-    global_step : tensor or int
-        Xurrent training step
-    sess : tf.Session
-    """
-    # write result to summary
-    summary = tf.Summary()
-    eval_names, avg_results = evaluation_results
-    for name, result in zip(eval_names, avg_results):
-        summary.value.add(tag='Evaluation/' + phase + '/' + name,
-                          simple_value=result)
-    summary_writer.add_summary(summary, global_step)
-
-
-def _do_evaluation(hypes, step, sess_coll, eval_dict):
-    sess, saver, summary_op, summary_writer, coord, threads = sess_coll
-    logging.info('Doing Evaluate with Training Data.')
-
-    eval_results = core.do_eval(hypes, eval_dict, phase='train',
-                                sess=sess)
-    _write_evaluation_to_summary(eval_results, summary_writer,
-                                 "Train", step, sess)
-
-    logging.info('Doing Evaluation with Testing Data.')
-    eval_results = core.do_eval(hypes, eval_dict, phase='val',
-                                sess=sess)
-    _write_evaluation_to_summary(eval_results, summary_writer,
-                                 'val', step, sess)
-
-
 def _write_eval_dict_to_summary(eval_dict, tag, summary_writer, global_step):
     summary = tf.Summary()
     for name, result in eval_dict:
@@ -173,19 +132,6 @@ def _write_images_to_summary(images, summary_writer, step):
             with tf.Session() as sess:
                 summary_str = sess.run([log_image])
                 summary_writer.add_summary(summary_str[0], step)
-    return
-
-
-def _do_python_evaluation(hypes, step, sess_coll, objective,
-                          image_pl, softmax):
-    logging.info('Doing Python Evaluation.')
-    sess, saver, summary_op, summary_writer, coord, threads = sess_coll
-    eval_dict, images = objective.evaluate(hypes, sess, image_pl, softmax)
-
-    utils.print_eval_dict(eval_dict)
-    _write_eval_dict_to_summary(eval_dict, summary_writer, step)
-    _write_images_to_summary(images, summary_writer, step)
-
     return
 
 
