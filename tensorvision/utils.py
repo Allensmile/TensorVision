@@ -126,18 +126,31 @@ def load_modules_from_hypes(hypes):
     -------
     hypes, data_input, arch, objective, solver
     """
+    modules = {}
     base_path = hypes['dirs']['base_path']
-    _add_paths_to_sys(hypes)
+
+    # _add_paths_to_sys(hypes)
     f = os.path.join(base_path, hypes['model']['input_file'])
     data_input = imp.load_source("input", f)
+    modules['input'] = data_input
+
     f = os.path.join(base_path, hypes['model']['architecture_file'])
     arch = imp.load_source("arch", f)
+    modules['arch'] = arch
+
     f = os.path.join(base_path, hypes['model']['objective_file'])
     objective = imp.load_source("objective", f)
+    modules['objective'] = objective
+
     f = os.path.join(base_path, hypes['model']['optimizer_file'])
     solver = imp.load_source("solver", f)
+    modules['solver'] = solver
 
-    return data_input, arch, objective, solver
+    f = os.path.join(base_path, hypes['model']['evaluator_file'])
+    eva = imp.load_source("evaluator", f)
+    modules['eval'] = eva
+
+    return modules
 
 
 def _add_paths_to_sys(hypes):
@@ -188,7 +201,16 @@ def load_modules_from_logdir(logdir):
     f = os.path.join(model_dir, "solver.py")
     solver = imp.load_source("solver", f)
 
-    return data_input, arch, objective, solver
+    f = os.path.join(model_dir, "eval.py")
+    eva = imp.load_source("evaluator", f)
+    modules = {}
+    modules['input'] = data_input
+    modules['arch'] = arch
+    modules['objective'] = objective
+    modules['solver'] = solver
+    modules['eval'] = eva
+
+    return modules
 
 
 def load_hypes_from_logdir(logdir):

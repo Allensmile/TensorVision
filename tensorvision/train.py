@@ -32,6 +32,8 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 
 import tensorflow as tf
 
+import string
+
 import tensorvision.utils as utils
 import tensorvision.core as core
 
@@ -56,25 +58,6 @@ def _copy_parameters_to_traindir(hypes, input_file, target_name, target_dir):
     input_file = os.path.os.path.realpath(
         os.path.join(hypes['dirs']['base_path'], input_file))
     copyfile(input_file, target_file)
-
-
-def _start_enqueuing_threads(hypes, q, sess, data_input):
-    """
-    Start the enqueuing threads of the data_input module.
-
-    Parameters
-    ----------
-    hypes : dict
-        Hyperparameters
-    sess : session
-    q : queue
-    data_input: data_input
-    """
-    with tf.name_scope('data_load'):
-            data_input.start_enqueuing_threads(hypes, q['train'], 'train',
-                                               sess, hypes['dirs']['data_dir'])
-            data_input.start_enqueuing_threads(hypes, q['val'], 'val', sess,
-                                               hypes['dirs']['data_dir'])
 
 
 def initialize_training_folder(hypes):
@@ -112,83 +95,6 @@ def initialize_training_folder(hypes):
         hypes, hypes['model']['objective_file'], "objective.py", target_dir)
     _copy_parameters_to_traindir(
         hypes, hypes['model']['optimizer_file'], "solver.py", target_dir)
-
-
-def build_training_graph(hypes, modules):
-    """
-    Build the tensorflow graph out of the model files.
-
-    Parameters
-    ----------
-    hypes : dict
-        Hyperparameters
-    modules : tuple
-        The modules load in utils.
-
-    Returns
-    -------
-    tuple
-        (q, train_op, loss, eval_lists) where
-        q is a dict with keys 'train' and 'val' which includes queues,
-        train_op is a tensorflow op,
-        loss is a float,
-        eval_lists is a dict with keys 'train' and 'val'
-    """
-    data_input, arch, objective, solver = modules
-
-    global_step = tf.Variable(0.0, trainable=False)
-    learning_rate = tf.placeholder(tf.float32)
-    tf.scalar_summary('learning_rate', learning_rate)
-
-    q, logits, decoder, = {}, {}, {}
-    image_batch, label_batch = {}, {}
-    eval_lists = {}
-
-    # Add Input Producers to the Graph
-    with tf.name_scope('Input'):
-        q['train'] = data_input.create_queues(hypes, 'train')
-        input_batch = data_input.inputs(hypes, q['train'], 'train',
-                                        hypes['dirs']['data_dir'])
-        image_batch['train'], label_batch['train'] = input_batch
-
-    logits['train'] = arch.inference(hypes, image_batch['train'],
-                                     train=True)
-
-    decoder['train'] = objective.decoder(hypes, logits['train'])
-
-    # Add to the Graph the Ops for loss calculation.
-    loss = objective.loss(hypes, decoder['train'], label_batch['train'])
-
-    # Add to the Graph the Ops that calculate and apply gradients.
-    train_op = solver.training(hypes, loss,
-                               global_step=global_step,
-                               learning_rate=learning_rate)
-
-    # Add the Op to compare the logits to the labels during evaluation.
-    if hasattr(objective, 'evaluation'):
-        eval_lists['train'] = objective.evaluation(hypes, decoder['train'],
-                                                   label_batch['train'])
-
-    # Validation Cycle to the Graph
-    with tf.name_scope('Validation'):
-        with tf.name_scope('Input'):
-            q['val'] = data_input.create_queues(hypes, 'val')
-            input_batch = data_input.inputs(hypes, q['val'], 'val',
-                                            hypes['dirs']['data_dir'])
-            image_batch['val'], label_batch['val'] = input_batch
-
-            tf.get_variable_scope().reuse_variables()
-
-        logits['val'] = arch.inference(hypes, image_batch['val'],
-                                       train=False)
-
-        decoder['val'] = objective.decoder(hypes, logits['val'])
-
-        if hasattr(objective, 'evaluation'):
-            eval_lists['val'] = objective.evaluation(hypes, decoder['val'],
-                                                     label_batch['val'])
-
-    return q, train_op, loss, eval_lists, learning_rate
 
 
 def maybe_download_and_extract(hypes):
@@ -231,33 +137,6 @@ def _write_evaluation_to_summary(evaluation_results, summary_writer, phase,
     summary_writer.add_summary(summary, global_step)
 
 
-def _print_training_status(hypes, step, loss_value, summary_str,
-                           start_time, sess_coll):
-    duration = (time.time() - start_time) / int(utils.cfg.step_show)
-    examples_per_sec = hypes['solver']['batch_size'] / duration
-    sec_per_batch = float(duration)
-    info_str = utils.cfg.step_str
-
-    sess, saver, summary_op, summary_writer, coord, threads = sess_coll
-
-    # Update the events file.
-    summary_writer.add_summary(summary_str, step)
-
-    logging.info(info_str.format(step=step,
-                                 total_steps=hypes['solver']['max_steps'],
-                                 loss_value=loss_value,
-                                 sec_per_batch=sec_per_batch,
-                                 examples_per_sec=examples_per_sec)
-                 )
-
-
-def _write_checkpoint_to_disk(hypes, step, sess_coll):
-    sess, saver, summary_op, summary_writer, coord, threads = sess_coll
-    checkpoint_path = os.path.join(hypes['dirs']['output_dir'],
-                                   'model.ckpt')
-    saver.save(sess, checkpoint_path, global_step=step)
-
-
 def _do_evaluation(hypes, step, sess_coll, eval_dict):
     sess, saver, summary_op, summary_writer, coord, threads = sess_coll
     logging.info('Doing Evaluate with Training Data.')
@@ -274,10 +153,10 @@ def _do_evaluation(hypes, step, sess_coll, eval_dict):
                                  'val', step, sess)
 
 
-def _write_eval_dict_to_summary(eval_dict, summary_writer, global_step):
+def _write_eval_dict_to_summary(eval_dict, tag, summary_writer, global_step):
     summary = tf.Summary()
     for name, result in eval_dict:
-        summary.value.add(tag='Evaluation/' + 'python' + '/' + name,
+        summary.value.add(tag=tag + '/' + name,
                           simple_value=result)
     summary_writer.add_summary(summary, global_step)
     return
@@ -310,62 +189,110 @@ def _do_python_evaluation(hypes, step, sess_coll, objective,
     return
 
 
-def run_training_step(hypes, step, start_time, graph_ops, sess_coll,
-                      modules, image_pl, softmax):
+def run_training(hypes, modules, tv_graph, tv_sess):
     """Run one iteration of training."""
     # Unpack operations for later use
-    sess, saver, summary_op, summary_writer, coord, threads = sess_coll
+    summary = tf.Summary()
+    sess = tv_sess['sess']
+    summary_writer = tv_sess['writer']
 
-    q, train_op, loss, eval_dict, learning_rate = graph_ops
-    data_input, arch, objective, solver = modules
+    solver = modules['solver']
 
-    lr = solver.get_learning_rate(hypes, step)
-    feed_dict = {learning_rate: lr}
+    display_iter = hypes['logging']['display_iter']
+    write_iter = hypes['logging'].get('write_iter', 5*display_iter)
+    eval_iter = hypes['logging']['eval_iter']
 
     # Run the training Step
+    start_time = time.time()
+    for step in xrange(hypes['solver']['max_steps']):
 
-    if step % int(utils.cfg.step_show):
-        sess.run([train_op], feed_dict=feed_dict)
+        lr = solver.get_learning_rate(hypes, step)
+        feed_dict = {tv_graph['learning_rate']: lr}
 
-    # Write the summaries and print an overview fairly often.
-    elif step % int(utils.cfg.step_show) == 0:
-        # Print status to stdout.
-        _, loss_value, summary_str = sess.run([train_op, loss, summary_op],
-                                              feed_dict=feed_dict)
-        _print_training_status(hypes, step, loss_value, summary_str,
-                               start_time, sess_coll)
-        # Reset timer
-        start_time = time.time()
+        if step % display_iter:
+            sess.run([tv_graph['train_op']], feed_dict=feed_dict)
 
-    # Do a evaluation and print the current state
-    if (step + 1) % int(utils.cfg.step_eval) == 0 or \
-       (step + 1) == hypes['solver']['max_steps']:
-        # write checkpoint to disk
-        if hasattr(objective, 'evaluate'):
-            _do_python_evaluation(hypes, step, sess_coll, objective,
-                                  image_pl, softmax)
-        if hasattr(objective, 'evaluation'):
-            logging.warning("Defining evaluation Tensors is depricated.")
-            logging.warning("This might be removed in future Versions.")
-            _do_evaluation(hypes, step, sess_coll, eval_dict)
-        # Reset timer
-        start_time = time.time()
+        # Write the summaries and print an overview fairly often.
+        elif step % display_iter == 0:
+            # Print status to stdout.
+            _, loss_value = sess.run([tv_graph['train_op'],
+                                      tv_graph['losses']['total_loss']],
+                                     feed_dict=feed_dict)
 
-    # Save a checkpoint periodically.
-    if (step + 1) % int(utils.cfg.step_write) == 0 or \
-       (step + 1) == hypes['solver']['max_steps']:
-        # write checkpoint to disk
-        _write_checkpoint_to_disk(hypes, step, sess_coll)
-        # Reset timer
-        start_time = time.time()
+            _print_training_status(hypes, step, loss_value, start_time, lr)
 
-    return start_time
+            eval_names, eval_ops = zip(*tv_graph['eval_list'])
+            eval_results = sess.run(eval_ops, feed_dict=feed_dict)
+
+            print_str = string.join([nam + ": %.2f" for nam in eval_names],
+                                    ', ')
+            print_str = "    " + print_str
+            logging.info(print_str % tuple(eval_results))
+
+            if step % write_iter == 0:
+                # write values to summary
+                summary_str = sess.run(tv_sess['summary_op'],
+                                       feed_dict=feed_dict)
+                summary_writer.add_summary(summary_str, global_step=step)
+                summary.value.add(tag='training/total_loss',
+                                  simple_value=float(loss_value))
+                summary.value.add(tag='training/learning_rate',
+                                  simple_value=lr)
+                summary_writer.add_summary(summary, step)
+                # Convert numpy types to simple types.
+                eval_results = np.array(eval_results)
+                eval_results = eval_results.tolist()
+                eval_dict = zip(eval_names, eval_results)
+                _write_eval_dict_to_summary(eval_dict, 'Eval_dict',
+                                            summary_writer, step)
+
+            # Reset timer
+            start_time = time.time()
+
+        # Do a evaluation and print the current state
+        if (step + 1) % eval_iter == 0 or \
+           (step + 1) == hypes['solver']['max_steps']:
+            # write checkpoint to disk
+
+            logging.info('Doing Python Evaluation.')
+            eval_dict, images = modules['eval'].evaluate(
+                hypes, sess, tv_graph['image_pl'], tv_graph['inf_out'])
+
+            utils.print_eval_dict(eval_dict)
+            _write_eval_dict_to_summary(eval_dict, 'Evaluation',
+                                        summary_writer, step)
+            _write_images_to_summary(images, summary_writer, step)
+
+            # Reset timer
+            start_time = time.time()
+
+        # Save a checkpoint periodically.
+        if (step + 1) % int(utils.cfg.step_write) == 0 or \
+           (step + 1) == hypes['solver']['max_steps']:
+            # write checkpoint to disk
+            checkpoint_path = os.path.join(hypes['dirs']['output_dir'],
+                                           'model.ckpt')
+            tv_sess['saver'].save(sess, checkpoint_path, global_step=step)
+            # Reset timer
+            start_time = time.time()
 
 
-def _create_input_placeholder():
-    image_pl = tf.placeholder(tf.float32)
-    label_pl = tf.placeholder(tf.float32)
-    return image_pl, label_pl
+def _print_training_status(hypes, step, loss_value, start_time, lr):
+
+    info_str = utils.cfg.step_str
+
+    # Prepare printing
+    duration = (time.time() - start_time) / int(utils.cfg.step_show)
+    examples_per_sec = hypes['solver']['batch_size'] / duration
+    sec_per_batch = float(duration)
+
+    logging.info(info_str.format(step=step,
+                                 total_steps=hypes['solver']['max_steps'],
+                                 loss_value=loss_value,
+                                 lr_value=lr,
+                                 sec_per_batch=sec_per_batch,
+                                 examples_per_sec=examples_per_sec)
+                 )
 
 
 def do_training(hypes):
@@ -386,41 +313,37 @@ def do_training(hypes):
     # test on MNIST.
 
     modules = utils.load_modules_from_hypes(hypes)
-    data_input, arch, objective, solver = modules
 
     # Tell TensorFlow that the model will be built into the default Graph.
     with tf.Graph().as_default():
 
         # build the graph based on the loaded modules
-        graph_ops = build_training_graph(hypes, modules)
-        q = graph_ops[0]
+        with tf.name_scope("Queues"):
+            queue = modules['input'].create_queues(hypes, 'train')
+
+        tv_graph = core.build_training_graph(hypes, queue, modules)
 
         # prepaire the tv session
-        sess_coll = core.start_tv_session(hypes)
-        sess, saver, summary_op, summary_writer, coord, threads = sess_coll
+        tv_sess = core.start_tv_session(hypes)
+        sess = tv_sess['sess']
 
         with tf.name_scope('Validation'):
-            image_pl, label_pl = _create_input_placeholder()
+            image_pl = tf.placeholder(tf.float32)
             image = tf.expand_dims(image_pl, 0)
-            softmax = core.build_inference_graph(hypes, modules,
-                                                 image=image,
-                                                 label=label_pl)
+            inf_out = core.build_inference_graph(hypes, modules,
+                                                 image=image)
+            tv_graph['image_pl'] = image_pl
+            tv_graph['inf_out'] = inf_out
 
         # Start the data load
-        _start_enqueuing_threads(hypes, q, sess, data_input)
+        modules['input'].start_enqueuing_threads(hypes, queue, 'train', sess)
 
         # And then after everything is built, start the training loop.
-        start_time = time.time()
-        for step in xrange(hypes['solver']['max_steps']):
-            start_time = run_training_step(hypes, step, start_time,
-                                           graph_ops, sess_coll, modules,
-                                           image_pl, softmax)
-            if hasattr(solver, 'update_learning_rate'):
-                solver.update_learning_rate(hypes, step)
+        run_training(hypes, modules, tv_graph, tv_sess)
 
         # stopping input Threads
-        coord.request_stop()
-        coord.join(threads)
+        tv_sess['coord'].request_stop()
+        tv_sess['coord'].join(tv_sess['threads'])
 
 
 def continue_training(logdir):
@@ -435,49 +358,10 @@ def continue_training(logdir):
     logdir : string
         Directory with logs.
     """
-    hypes = utils.load_hypes_from_logdir(logdir)
-    modules = utils.load_modules_from_logdir(logdir)
-    data_input, arch, objective, solver = modules
-
-    # append output to output.log
-    logging_file = os.path.join(logdir, 'output.log')
-    utils.create_filewrite_handler(logging_file, mode='a')
-
-    # Tell TensorFlow that the model will be built into the default Graph.
-    with tf.Graph().as_default() as graph:
-
-        # build the graph based on the loaded modules
-        graph_ops = build_training_graph(hypes, modules)
-        q = graph_ops[0]
-
-        # prepaire the tv session
-        sess_coll = core.start_tv_session(hypes)
-        sess, saver, summary_op, summary_writer, coord, threads = sess_coll
-
-        if hasattr(objective, 'evaluate'):
-            with tf.name_scope('Validation'):
-                image_pl, label_pl = _create_input_placeholder()
-                image = tf.expand_dims(image_pl, 0)
-                softmax = core.build_inference_graph(hypes, modules,
-                                                     image=image,
-                                                     label=label_pl)
-
-        # Load weights from logdir
-        cur_step = core.load_weights(logdir, sess, saver)
-
-        # Start the data load
-        _start_enqueuing_threads(hypes, q, sess, data_input)
-
-        # And then after everything is built, start the training loop.
-        start_time = time.time()
-        for step in xrange(cur_step+1, hypes['solver']['max_steps']):
-            start_time = run_training_step(hypes, step, start_time,
-                                           graph_ops, sess_coll, modules,
-                                           image_pl, softmax)
-
-        # stopping input Threads
-        coord.request_stop()
-        coord.join(threads)
+    sess = None
+    saver = None
+    cur_step = core.load_weights(logdir, sess, saver)
+    return cur_step
 
 
 def main(_):
