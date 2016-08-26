@@ -29,10 +29,10 @@ flags.DEFINE_string('gpus', None,
                      'ids. [e.g. --gpus 0,3]'))
 
 
-def print_eval_dict(eval_dict):
+def print_eval_dict(eval_dict, prefix=''):
     logging.info('Results of Evaluation.')
     for name, value in eval_dict:
-            logging.info('    %s : % 0.04f ' % (name, value))
+            logging.info('    %s %s : % 0.04f ' % (name, prefix, value))
     return
 
 
@@ -301,7 +301,8 @@ _set_cfg_value('step_write', 'TV_STEP_WRITE', 1000, cfg)
 _set_cfg_value('max_to_keep', 'TV_MAX_KEEP', 10, cfg)
 _set_cfg_value('step_str',
                'TV_STEP_STR',
-               ('Step {step}/{total_steps}: loss = {loss_value:.2f} '
+               ('Step {step}/{total_steps}: loss = {loss_value:.2f}; '
+                'lr = {lr_value:.2e} '
                 '( {sec_per_batch:.3f} sec (per Batch); '
                 '{examples_per_sec:.1f} examples/sec)'),
                cfg)

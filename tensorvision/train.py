@@ -13,6 +13,9 @@ import numpy as np
 import os.path
 import sys
 
+import scipy as scp
+import scipy.misc
+
 # configure logging
 if 'TV_IS_DEV' in os.environ and os.environ['TV_IS_DEV']:
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
@@ -76,6 +79,11 @@ def initialize_training_folder(hypes):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
+    image_dir = os.path.join(hypes['dirs']['output_dir'], "images")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+    hypes['dirs']['image_dir'] = image_dir
+
     # Creating an additional logging saving the console outputs
     # into the training folder
     logging_file = os.path.join(hypes['dirs']['output_dir'], "output.log")
@@ -132,7 +140,44 @@ def _write_images_to_summary(images, summary_writer, step):
             with tf.Session() as sess:
                 summary_str = sess.run([log_image])
                 summary_writer.add_summary(summary_str[0], step)
+        break
     return
+
+
+def _write_images_to_disk(hypes, images, step):
+
+    new_dir = str(step) + "_images"
+    image_dir = os.path.join(hypes['dirs']['image_dir'], new_dir)
+    if not os.path.exists(image_dir):
+        os.mkdir(image_dir)
+    for name, image in images:
+        file_name = os.path.join(image_dir, name)
+        scp.misc.imsave(file_name, image)
+
+
+def _print_eval_dict(eval_names, eval_results, prefix=''):
+    print_str = string.join([nam + ": %.2f" for nam in eval_names],
+                            ', ')
+    print_str = "   " + prefix + "  " + print_str
+    logging.info(print_str % tuple(eval_results))
+
+
+class ExpoSmoother():
+    """docstring for expo_smoother"""
+    def __init__(self, decay=0.9):
+        self.weights = None
+        self.decay = decay
+
+    def update_weights(self, l):
+        if self.weights is None:
+            self.weights = np.array(l)
+            return self.weights
+        else:
+            self.weights = self.decay*self.weights + (1-self.decay)*np.array(l)
+            return self.weights
+
+    def get_weights(self):
+        return self.weights.tolist()
 
 
 def run_training(hypes, modules, tv_graph, tv_sess):
@@ -147,7 +192,15 @@ def run_training(hypes, modules, tv_graph, tv_sess):
     display_iter = hypes['logging']['display_iter']
     write_iter = hypes['logging'].get('write_iter', 5*display_iter)
     eval_iter = hypes['logging']['eval_iter']
+    save_iter = hypes['logging']['save_iter']
+    image_iter = hypes['logging'].get('image_iter', 5*save_iter)
 
+    py_smoother = ExpoSmoother(0.95)
+    dict_smoother = ExpoSmoother(0.95)
+
+    n = 0
+
+    eval_names, eval_ops = zip(*tv_graph['eval_list'])
     # Run the training Step
     start_time = time.time()
     for step in xrange(hypes['solver']['max_steps']):
@@ -167,13 +220,14 @@ def run_training(hypes, modules, tv_graph, tv_sess):
 
             _print_training_status(hypes, step, loss_value, start_time, lr)
 
-            eval_names, eval_ops = zip(*tv_graph['eval_list'])
             eval_results = sess.run(eval_ops, feed_dict=feed_dict)
 
-            print_str = string.join([nam + ": %.2f" for nam in eval_names],
-                                    ', ')
-            print_str = "    " + print_str
-            logging.info(print_str % tuple(eval_results))
+            _print_eval_dict(eval_names, eval_results, prefix='   (raw)')
+
+            dict_smoother.update_weights(eval_results)
+            smoothed_results = dict_smoother.get_weights()
+
+            _print_eval_dict(eval_names, smoothed_results, prefix='(smooth)')
 
             if step % write_iter == 0:
                 # write values to summary
@@ -189,7 +243,10 @@ def run_training(hypes, modules, tv_graph, tv_sess):
                 eval_results = np.array(eval_results)
                 eval_results = eval_results.tolist()
                 eval_dict = zip(eval_names, eval_results)
-                _write_eval_dict_to_summary(eval_dict, 'Eval_dict',
+                _write_eval_dict_to_summary(eval_dict, 'Eval/raw',
+                                            summary_writer, step)
+                eval_dict = zip(eval_names, smoothed_results)
+                _write_eval_dict_to_summary(eval_dict, 'Eval/smooth',
                                             summary_writer, step)
 
             # Reset timer
@@ -204,16 +261,31 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             eval_dict, images = modules['eval'].evaluate(
                 hypes, sess, tv_graph['image_pl'], tv_graph['inf_out'])
 
-            utils.print_eval_dict(eval_dict)
-            _write_eval_dict_to_summary(eval_dict, 'Evaluation',
-                                        summary_writer, step)
             _write_images_to_summary(images, summary_writer, step)
+
+            name = str(n % 10) + '_' + images[0][0]
+            image_file = os.path.join(hypes['dirs']['image_dir'], name)
+            scp.misc.imsave(image_file, images[0][1])
+            n = n + 1
+
+            logging.info('Raw Results:')
+            utils.print_eval_dict(eval_dict, prefix='(raw)   ')
+            _write_eval_dict_to_summary(eval_dict, 'Evaluation/raw',
+                                        summary_writer, step)
+
+            logging.info('Smooth Results:')
+            names, res = zip(*eval_dict)
+            smoothed = py_smoother.update_weights(res)
+            eval_dict = zip(names, smoothed)
+            utils.print_eval_dict(eval_dict, prefix='(smooth)')
+            _write_eval_dict_to_summary(eval_dict, 'Evaluation/smoothed',
+                                        summary_writer, step)
 
             # Reset timer
             start_time = time.time()
 
         # Save a checkpoint periodically.
-        if (step + 1) % int(utils.cfg.step_write) == 0 or \
+        if (step + 1) % save_iter == 0 or \
            (step + 1) == hypes['solver']['max_steps']:
             # write checkpoint to disk
             checkpoint_path = os.path.join(hypes['dirs']['output_dir'],
@@ -221,6 +293,10 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             tv_sess['saver'].save(sess, checkpoint_path, global_step=step)
             # Reset timer
             start_time = time.time()
+
+        if (step + 1) % image_iter == 0 or \
+           (step + 1) == hypes['solver']['max_steps']:
+            _write_images_to_disk(hypes, images, step)
 
 
 def _print_training_status(hypes, step, loss_value, start_time, lr):
