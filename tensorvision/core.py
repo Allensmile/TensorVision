@@ -77,9 +77,11 @@ def build_graph(hypes, modules, train=True):
                                             phase='train')
             image_batch['train'], label_batch['train'] = input_batch
 
-        logits['train'] = arch.inference(hypes, image_batch['train'], 'train')
+        logits['train'] = arch.inference(hypes, image_batch['train'],
+                                         phase='train')
 
-        decoder['train'] = objective.decoder(hypes, logits['train'], 'train')
+        decoder['train'] = objective.decoder(hypes, logits['train'],
+                                             phase='train')
 
         # Add to the Graph the Ops for loss calculation.
         loss = objective.loss(hypes, decoder['train'], label_batch['train'])
@@ -109,9 +111,11 @@ def build_graph(hypes, modules, train=True):
         if train:
             tf.get_variable_scope().reuse_variables()
 
-        logits['val'] = arch.inference(hypes, image_batch['val'], 'val')
+        logits['val'] = arch.inference(hypes, image_batch['val'],
+                                       phase='val')
 
-        decoder['val'] = objective.decoder(hypes, logits['val'], 'val')
+        decoder['val'] = objective.decoder(hypes, logits['val'],
+                                           phase='val')
 
         eval_lists['val'] = objective.evaluation(hypes, decoder['val'],
                                                  label_batch['val'])
@@ -154,13 +158,13 @@ def build_inference_graph(hypes, modules, image, label):
     """
     data_input, arch, objective, solver = modules
 
-    logits = arch.inference(hypes, image, train=False)
+    logits = arch.inference(hypes, image, phase='val')
 
-    decoder = objective.decoder(hypes, logits)
+    decoder = objective.decoder(hypes, logits, phase='val')
 
-    softmax_layer = _add_softmax(hypes, decoder)
+    # softmax_layer = _add_softmax(hypes, decoder)
 
-    return softmax_layer
+    return decoder
 
 
 def start_tv_session(hypes):

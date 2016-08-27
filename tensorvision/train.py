@@ -13,6 +13,8 @@ import numpy as np
 import os.path
 import sys
 
+import string
+
 # configure logging
 if 'TV_IS_DEV' in os.environ and os.environ['TV_IS_DEV']:
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
@@ -73,8 +75,8 @@ def _start_enqueuing_threads(hypes, q, sess, data_input):
     with tf.name_scope('data_load'):
             data_input.start_enqueuing_threads(hypes=hypes, q=q['train'],
                                                phase='train', sess=sess)
-            data_input.start_enqueuing_threads(hypes=hypes, q=q['train'],
-                                               phase='train', sess=sess)
+            data_input.start_enqueuing_threads(hypes=hypes, q=q['val'],
+                                               phase='val', sess=sess)
 
 
 def initialize_training_folder(hypes):
@@ -170,9 +172,9 @@ def build_training_graph(hypes, modules):
                         "This will result in a crash in feature Version.")
 
     # Add the Op to compare the logits to the labels during evaluation.
-    if hasattr(objective, 'evaluation'):
-        eval_lists['train'] = objective.evaluation(hypes, decoder['train'],
-                                                   label_batch['train'])
+    # if hasattr(objective, 'evaluation'):
+    #    eval_lists['train'] = objective.evaluation(hypes, decoder['train'],
+    #                                               label_batch['train'])
 
     # Validation Cycle to the Graph
     with tf.name_scope('Validation'):
@@ -188,9 +190,12 @@ def build_training_graph(hypes, modules):
 
         decoder['val'] = objective.decoder(hypes, logits['val'], 'val')
 
-        if hasattr(objective, 'evaluation'):
-            eval_lists['val'] = objective.evaluation(hypes, decoder['val'],
-                                                     label_batch['val'])
+    #    if hasattr(objective, 'evaluation'):
+    #        eval_lists['val'] = objective.evaluation(hypes, decoder['val'],
+    #                                                 label_batch['val'])
+
+    eval_lists = objective.evaluation(hypes, image_batch,
+                                      label_batch, decoder)
 
     return q, train_op, loss, eval_lists, learning_rate
 
@@ -328,13 +333,16 @@ def run_training_step(hypes, step, start_time, graph_ops, sess_coll,
         logging.warning("The solver defined in solver_file should"
                         " implement a function get_learning_rate.")
 
+    total_loss = loss[0]
+
     # Run the training Step
-    _, loss_value = sess.run([train_op, loss], feed_dict=feed_dict)
+    _, loss_value = sess.run([train_op, total_loss], feed_dict=feed_dict)
 
     # Write the summaries and print an overview fairly often.
     if step % int(utils.cfg.step_show) == 0:
         # Print status to stdout.
-        _print_training_status(hypes, step, loss_value, start_time, sess_coll)
+        if step > 0:
+            _print_training_status(hypes, step, loss_value, start_time, sess_coll)
         # Reset timer
         start_time = time.time()
 
@@ -367,6 +375,62 @@ def _create_input_placeholder():
     image_pl = tf.placeholder(tf.float32)
     label_pl = tf.placeholder(tf.float32)
     return image_pl, label_pl
+
+
+def my_training(hypes):
+    H = hypes
+    modules = utils.load_modules_from_hypes(hypes)
+    data_input, arch, objective, solver = modules
+
+    modules = utils.load_modules_from_hypes(hypes)
+    data_input, arch, objective, solver = modules
+
+    # Tell TensorFlow that the model will be built into the default Graph.
+    with tf.Graph().as_default():
+
+        # build the graph based on the loaded modules
+        graph_ops = build_training_graph(hypes, modules)
+        q = graph_ops[0]
+
+        global_step = hypes['tensors']['global_step']
+
+        # prepaire the tv session
+        sess_coll = core.start_tv_session(hypes)
+        sess, saver, summary_op, summary_writer, coord, threads = sess_coll
+
+        q, train_op, loss, accuracy, learning_rate = graph_ops
+
+        _start_enqueuing_threads(hypes, q, sess, data_input)
+
+        start = time.time()
+        max_iter = H['solver'].get('max_iter', 10000000)
+        for i in xrange(max_iter):
+            display_iter = H['logging']['display_iter']
+            adjusted_lr = (H['solver']['learning_rate'] *
+                           0.5 ** max(0, (i / H['solver']['learning_rate_step']) - 2))
+            lr_feed = {learning_rate: adjusted_lr}
+
+            if i % display_iter != 0:
+                # train network
+                batch_loss_train, _ = sess.run([loss[0], train_op], feed_dict=lr_feed)
+            else:
+                # test network every N iterations; log additional info
+                if i > 0:
+                    dt = (time.time() - start) / (H['batch_size'] * display_iter)
+                start = time.time()
+                (train_loss, test_accuracy, summary_str, _) = sess.run([loss[0], accuracy['val'],
+                                                    summary_op, train_op], feed_dict=lr_feed)
+                summary_writer.add_summary(summary_str, global_step=i)
+                print_str = string.join([
+                    'Step: %d',
+                    'lr: %f',
+                    'Train Loss: %.2f',
+                    'Test Accuracy: %.1f%%',
+                    'Time/image (ms): %.1f'
+                ], ', ')
+                print(print_str %
+                      (i, adjusted_lr, train_loss,
+                       test_accuracy * 100, dt * 1000 if i > 0 else 0))
 
 
 def do_training(hypes):
@@ -407,8 +471,11 @@ def do_training(hypes):
                                                  image=image,
                                                  label=label_pl)
 
+        logging.info("Start enqueuing Threads.")
         # Start the data load
         _start_enqueuing_threads(hypes, q, sess, data_input)
+
+        logging.info("Begin training.")
 
         # And then after everything is built, start the training loop.
         start_time = time.time()
