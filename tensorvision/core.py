@@ -73,7 +73,7 @@ def build_training_graph(hypes, queue, modules):
 
     # Add Input Producers to the Graph
     with tf.name_scope("Inputs"):
-        image, labels = data_input.inputs(hypes, queue, 'train')
+        image, labels = data_input.inputs(hypes, queue, phase='train')
 
     # Run inference on the encoder network
     logits = encoder.inference(hypes, image, train=True)

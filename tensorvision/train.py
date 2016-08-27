@@ -265,10 +265,12 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             logging.info("Evaluation Finished. All results will be saved to:")
             logging.info(hypes['dirs']['output_dir'])
 
-            name = str(n % 10) + '_' + images[0][0]
-            image_file = os.path.join(hypes['dirs']['image_dir'], name)
-            scp.misc.imsave(image_file, images[0][1])
-            n = n + 1
+            if images is not None and len(images) > 0:
+
+                name = str(n % 10) + '_' + images[0][0]
+                image_file = os.path.join(hypes['dirs']['image_dir'], name)
+                scp.misc.imsave(image_file, images[0][1])
+                n = n + 1
 
             logging.info('Raw Results:')
             utils.print_eval_dict(eval_dict, prefix='(raw)   ')
