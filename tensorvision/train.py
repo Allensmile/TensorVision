@@ -413,6 +413,7 @@ def continue_training(logdir):
             cur_step = 0
 
         with tf.name_scope('Validation'):
+            tf.get_variable_scope().reuse_variables()
             image_pl = tf.placeholder(tf.float32)
             image = tf.expand_dims(image_pl, 0)
             inf_out = core.build_inference_graph(hypes, modules,
