@@ -253,15 +253,17 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             start_time = time.time()
 
         # Do a evaluation and print the current state
-        if (step + 1) % eval_iter == 0 or \
+        if (step) % eval_iter == 0 or \
            (step + 1) == hypes['solver']['max_steps']:
             # write checkpoint to disk
 
-            logging.info('Doing Python Evaluation.')
+            logging.info('Running Evaluation Script.')
             eval_dict, images = modules['eval'].evaluate(
                 hypes, sess, tv_graph['image_pl'], tv_graph['inf_out'])
 
             _write_images_to_summary(images, summary_writer, step)
+            logging.info("Evaluation Finished. All results will be saved to:")
+            logging.info(hypes['dirs']['output_dir'])
 
             name = str(n % 10) + '_' + images[0][0]
             image_file = os.path.join(hypes['dirs']['image_dir'], name)
@@ -285,7 +287,7 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             start_time = time.time()
 
         # Save a checkpoint periodically.
-        if (step + 1) % save_iter == 0 or \
+        if (step) % save_iter == 0 and step > 0 or \
            (step + 1) == hypes['solver']['max_steps']:
             # write checkpoint to disk
             checkpoint_path = os.path.join(hypes['dirs']['output_dir'],
@@ -294,7 +296,7 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             # Reset timer
             start_time = time.time()
 
-        if (step + 1) % image_iter == 0 or \
+        if step % image_iter == 0 and step > 0 or \
            (step + 1) == hypes['solver']['max_steps']:
             _write_images_to_disk(hypes, images, step)
 
