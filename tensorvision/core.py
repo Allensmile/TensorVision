@@ -127,8 +127,6 @@ def build_inference_graph(hypes, modules, image):
     """
     with tf.name_scope("Validation"):
 
-        tf.get_variable_scope().reuse_variables()
-
         logits = modules['arch'].inference(hypes, image, train=False)
 
         decoded_logits = modules['objective'].decoder(hypes, logits,
