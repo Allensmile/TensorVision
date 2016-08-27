@@ -37,17 +37,44 @@ flags.DEFINE_string('logdir', None,
                     'Directory where logs are stored.')
 
 
-def _create_input_placeholder():
-    image_pl = tf.placeholder(tf.float32)
-    label_pl = tf.placeholder(tf.float32)
-    return image_pl, label_pl
-
-
 def _write_images_to_logdir(images, logdir):
-    logdir = os.path.join(logdir, "eval/")
+    logdir = os.path.join(logdir, "images/")
+    if not os.path.exists(logdir):
+        os.mkdir(logdir)
     for name, image in images:
         save_file = os.path.join(logdir, name)
         scp.misc.imsave(save_file, image)
+
+
+def build_inference(hypes, modules, image):
+    """Run one evaluation against the full epoch of data.
+
+    Parameters
+    ----------
+    hypes : dict
+        Hyperparameters
+    modules : tuble
+        the modules load in utils
+    image : placeholder
+    label : placeholder
+
+    return:
+        graph_ops
+    """
+    data_input = modules['input']
+    arch = modules['arch']
+    objective = modules['objective']
+    solver = modules['solver']
+    eva = modules['eval']
+
+    logits = arch.inference(hypes, image, phase='val')
+
+    decoded_logits = objective.decoder(hypes, logits, phase='val')
+
+    (pred_boxes, pred_logits, pred_confidences,
+     pred_confs_deltas, pred_boxes_deltas) = decoded_logits
+
+    return pred_boxes, pred_confidences
 
 
 def do_analyze(logdir):
@@ -64,34 +91,38 @@ def do_analyze(logdir):
     """
     hypes = utils.load_hypes_from_logdir(logdir)
     modules = utils.load_modules_from_logdir(logdir)
-    data_input, arch, objective, solver = modules
 
     # Tell TensorFlow that the model will be built into the default Graph.
     with tf.Graph().as_default():
 
         # prepaire the tv session
 
-        with tf.name_scope('Validation'):
-            image_pl, label_pl = _create_input_placeholder()
-            image = tf.expand_dims(image_pl, 0)
-            softmax = core.build_inference_graph(hypes, modules,
-                                                 image=image,
-                                                 label=label_pl)
+        image_pl = tf.placeholder(tf.float32)
+        image = tf.expand_dims(image_pl, 0)
+        inf_out = build_inference(hypes, modules,
+                                  image=image)
 
-        sess_coll = core.start_tv_session(hypes)
-        sess, saver, summary_op, summary_writer, coord, threads = sess_coll
+        # Create a session for running Ops on the Graph.
+        sess = tf.Session()
+        saver = tf.train.Saver()
 
         core.load_weights(logdir, sess, saver)
 
-        eval_dict, images = objective.tensor_eval(hypes, sess, image_pl,
-                                                  softmax)
+        logging.info("Graph loaded succesfully. Starting evaluation.")
 
-        logging_file = os.path.join(logdir, "eval/analysis.log")
+        output_dir = os.path.join(logdir, 'analyse')
+
+        logging_file = os.path.join(logdir, "analyse/output.log")
         utils.create_filewrite_handler(logging_file)
 
+        eval_dict, images = modules['eval'].evaluate(
+            hypes, sess, image_pl, inf_out)
+
+        logging.info("Evaluation Succesfull. Results:")
+
         utils.print_eval_dict(eval_dict)
-        _write_images_to_logdir(images, logdir)
-    return
+        _write_images_to_logdir(images, output_dir)
+        logging.info("Output is written to: %s" % output_dir)
 
 
 # Utility functions for analyzing models
