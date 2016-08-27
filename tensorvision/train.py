@@ -103,6 +103,8 @@ def initialize_training_folder(hypes):
         hypes, hypes['model']['objective_file'], "objective.py", target_dir)
     _copy_parameters_to_traindir(
         hypes, hypes['model']['optimizer_file'], "solver.py", target_dir)
+    _copy_parameters_to_traindir(
+        hypes, hypes['model']['evaluator_file'], "eval.py", target_dir)
 
 
 def maybe_download_and_extract(hypes):
@@ -180,7 +182,7 @@ class ExpoSmoother():
         return self.weights.tolist()
 
 
-def run_training(hypes, modules, tv_graph, tv_sess):
+def run_training(hypes, modules, tv_graph, tv_sess, start_step=0):
     """Run one iteration of training."""
     # Unpack operations for later use
     summary = tf.Summary()
@@ -203,7 +205,7 @@ def run_training(hypes, modules, tv_graph, tv_sess):
     eval_names, eval_ops = zip(*tv_graph['eval_list'])
     # Run the training Step
     start_time = time.time()
-    for step in xrange(hypes['solver']['max_steps']):
+    for step in xrange(start_step, hypes['solver']['max_steps']):
 
         lr = solver.get_learning_rate(hypes, step)
         feed_dict = {tv_graph['learning_rate']: lr}
@@ -253,7 +255,7 @@ def run_training(hypes, modules, tv_graph, tv_sess):
             start_time = time.time()
 
         # Do a evaluation and print the current state
-        if (step) % eval_iter == 0 or \
+        if (step) % eval_iter == 0 and step > 0 or \
            (step + 1) == hypes['solver']['max_steps']:
             # write checkpoint to disk
 
@@ -384,10 +386,48 @@ def continue_training(logdir):
     logdir : string
         Directory with logs.
     """
-    sess = None
-    saver = None
-    cur_step = core.load_weights(logdir, sess, saver)
-    return cur_step
+    hypes = utils.load_hypes_from_logdir(logdir)
+    modules = utils.load_modules_from_logdir(logdir)
+
+    # Tell TensorFlow that the model will be built into the default Graph.
+    with tf.Graph().as_default():
+
+        # build the graph based on the loaded modules
+        with tf.name_scope("Queues"):
+            queue = modules['input'].create_queues(hypes, 'train')
+
+        tv_graph = core.build_training_graph(hypes, queue, modules)
+
+        # prepaire the tv session
+        tv_sess = core.start_tv_session(hypes)
+        sess = tv_sess['sess']
+        saver = tv_sess['saver']
+
+        cur_step = core.load_weights(logdir, sess, saver)
+        if cur_step is None:
+            logging.warning("Loaded global_step is None.")
+            logging.warning("This could mean,"
+                            " that no weights have been loaded.")
+            logging.warning("Starting Training with step 0.")
+            cur_step = 0
+
+        with tf.name_scope('Validation'):
+            image_pl = tf.placeholder(tf.float32)
+            image = tf.expand_dims(image_pl, 0)
+            inf_out = core.build_inference_graph(hypes, modules,
+                                                 image=image)
+            tv_graph['image_pl'] = image_pl
+            tv_graph['inf_out'] = inf_out
+
+        # Start the data load
+        modules['input'].start_enqueuing_threads(hypes, queue, 'train', sess)
+
+        # And then after everything is built, start the training loop.
+        run_training(hypes, modules, tv_graph, tv_sess, cur_step)
+
+        # stopping input Threads
+        tv_sess['coord'].request_stop()
+        tv_sess['coord'].join(tv_sess['threads'])
 
 
 def main(_):
