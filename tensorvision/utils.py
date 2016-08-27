@@ -232,8 +232,8 @@ def load_hypes_from_logdir(logdir):
         logging.info("f: %s", f)
         hypes = json.load(f)
     _add_paths_to_sys(hypes)
-    hypes['dirs']['base_path'] = logdir
-    hypes['dirs']['output_dir'] = logdir
+    hypes['dirs']['base_path'] = os.path.realpath(logdir)
+    hypes['dirs']['output_dir'] = os.path.realpath(logdir)
 
     return hypes
 
