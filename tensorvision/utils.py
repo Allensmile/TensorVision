@@ -170,7 +170,7 @@ def _add_paths_to_sys(hypes):
     if 'path' in hypes:
             for path in hypes['path']:
                 path = os.path.realpath(os.path.join(base_path, path))
-                sys.path.append(path)
+                sys.path.insert(1, path)
     return
 
 
