@@ -110,7 +110,7 @@ def set_gpus_to_use():
         os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpus
 
 
-def load_modules_from_hypes(hypes):
+def load_modules_from_hypes(hypes, postfix=""):
     """Load all modules from the files specified in hypes.
 
     Namely the modules loaded are:
@@ -130,23 +130,23 @@ def load_modules_from_hypes(hypes):
 
     # _add_paths_to_sys(hypes)
     f = os.path.join(base_path, hypes['model']['input_file'])
-    data_input = imp.load_source("input", f)
+    data_input = imp.load_source("input%s" % postfix, f)
     modules['input'] = data_input
 
     f = os.path.join(base_path, hypes['model']['architecture_file'])
-    arch = imp.load_source("arch", f)
+    arch = imp.load_source("arch%s" % postfix, f)
     modules['arch'] = arch
 
     f = os.path.join(base_path, hypes['model']['objective_file'])
-    objective = imp.load_source("objective", f)
+    objective = imp.load_source("objective%s" % postfix, f)
     modules['objective'] = objective
 
     f = os.path.join(base_path, hypes['model']['optimizer_file'])
-    solver = imp.load_source("solver", f)
+    solver = imp.load_source("solver%s" % postfix, f)
     modules['solver'] = solver
 
     f = os.path.join(base_path, hypes['model']['evaluator_file'])
-    eva = imp.load_source("evaluator", f)
+    eva = imp.load_source("evaluator%s" % postfix, f)
     modules['eval'] = eva
 
     return modules
@@ -164,9 +164,6 @@ def _add_paths_to_sys(hypes):
         Hyperparameters
     """
     base_path = hypes['dirs']['base_path']
-    for module in hypes['model'].values():
-        path = os.path.realpath(os.path.join(base_path, module))
-        sys.path.append(os.path.dirname(path))
     if 'path' in hypes:
             for path in hypes['path']:
                 path = os.path.realpath(os.path.join(base_path, path))

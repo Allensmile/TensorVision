@@ -63,7 +63,7 @@ def _copy_parameters_to_traindir(hypes, input_file, target_name, target_dir):
     copyfile(input_file, target_file)
 
 
-def initialize_training_folder(hypes):
+def initialize_training_folder(hypes, files_dir="model_files", logging=True):
     """
     Creating the training folder and copy all model files into it.
 
@@ -75,25 +75,27 @@ def initialize_training_folder(hypes):
     hypes : dict
         Hyperparameters
     """
-    target_dir = os.path.join(hypes['dirs']['output_dir'], "model_files")
+    target_dir = os.path.join(hypes['dirs']['output_dir'], files_dir)
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
     image_dir = os.path.join(hypes['dirs']['output_dir'], "images")
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
+
     hypes['dirs']['image_dir'] = image_dir
 
     # Creating an additional logging saving the console outputs
     # into the training folder
-    logging_file = os.path.join(hypes['dirs']['output_dir'], "output.log")
-    utils.create_filewrite_handler(logging_file)
+    if logging:
+        logging_file = os.path.join(hypes['dirs']['output_dir'], "output.log")
+        utils.create_filewrite_handler(logging_file)
 
     # TODO: read more about loggers and make file logging neater.
 
     target_file = os.path.join(target_dir, 'hypes.json')
     with open(target_file, 'w') as outfile:
-        json.dump(hypes, outfile, indent=2)
+        json.dump(hypes, outfile, indent=2, sort_keys=True)
     _copy_parameters_to_traindir(
         hypes, hypes['model']['input_file'], "data_input.py", target_dir)
     _copy_parameters_to_traindir(
