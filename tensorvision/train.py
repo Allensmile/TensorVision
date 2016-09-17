@@ -184,6 +184,28 @@ class ExpoSmoother():
         return self.weights.tolist()
 
 
+class MedianSmoother():
+    """docstring for expo_smoother"""
+    def __init__(self, num_entries=50):
+        self.weights = None
+        self.num = 50
+
+    def update_weights(self, l):
+        l = np.array(l).tolist()
+        if self.weights is None:
+            self.weights = [[i] for i in l]
+            return [np.median(w[-self.num:]) for w in self.weights]
+        else:
+            for i, w in enumerate(self.weights):
+                w.append(l[i])
+            if len(self.weights) > 20*self.num:
+                self.weights = [w[-self.num:] for w in self.weights]
+            return [np.median(w[-self.num:]) for w in self.weights]
+
+    def get_weights(self):
+        return [np.median(w[-self.num:]) for w in self.weights]
+
+
 def run_training(hypes, modules, tv_graph, tv_sess, start_step=0):
     """Run one iteration of training."""
     # Unpack operations for later use
@@ -199,7 +221,7 @@ def run_training(hypes, modules, tv_graph, tv_sess, start_step=0):
     save_iter = hypes['logging']['save_iter']
     image_iter = hypes['logging'].get('image_iter', 5*save_iter)
 
-    py_smoother = ExpoSmoother(0.95)
+    py_smoother = MedianSmoother(50)
     dict_smoother = ExpoSmoother(0.95)
 
     n = 0
