@@ -388,6 +388,39 @@ def overlay_segmentation(input_image, segmentation, color_dict):
     return np.array(background)
 
 
+def fast_overlay(input_image, segmentation, color=[0, 255, 0, 127]):
+    """
+    Overlay input_image with a hard segmentation result for two classes.
+
+    Store the result with the same name as segmentation_image, but with
+    `-overlay`.
+
+    Parameters
+    ----------
+    input_image : numpy.array
+        An image of shape [width, height, 3].
+    segmentation : numpy.array
+        Segmentation of shape [width, height].
+    color: color for forground class
+
+    Returns
+    -------
+    numpy.array
+        The image overlayed with the segmenation
+    """
+    color = np.array(color).reshape(1, 4)
+    shape = input_image.shape
+    segmentation = segmentation.reshape(shape[0], shape[1], 1)
+
+    output = np.dot(segmentation, color)
+    output = scipy.misc.toimage(output, mode="RGBA")
+
+    background = scipy.misc.toimage(input_image)
+    background.paste(output, box=None, mask=output)
+
+    return np.array(background)
+
+
 def soft_overlay_segmentation(input_image,
                               seg_probability,
                               colormap=None,
