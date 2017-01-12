@@ -61,7 +61,7 @@ def set_dirs(hypes, hypes_fname):
         if 'TV_DIR_RUNS' in os.environ:
             runs_dir = os.path.join(base_path, os.environ['TV_DIR_RUNS'])
         else:
-            runs_dir = os.path.join(base_path, 'RUNS')
+            runs_dir = os.path.join(base_path, '../RUNS')
 
         # test for project dir
         if hasattr(FLAGS, 'project') and FLAGS.project is not None:
@@ -84,7 +84,7 @@ def set_dirs(hypes, hypes_fname):
         if 'TV_DIR_DATA' in os.environ:
             data_dir = os.path.join(base_path, os.environ['TV_DIR_DATA'])
         else:
-            data_dir = os.path.join(base_path, 'DATA')
+            data_dir = os.path.join(base_path, '../DATA')
 
         hypes['dirs']['data_dir'] = data_dir
 
