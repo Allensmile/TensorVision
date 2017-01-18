@@ -230,10 +230,16 @@ def load_hypes_from_logdir(logdir, subdir="model_files"):
         logging.info("f: %s", f)
         hypes = json.load(f)
     _add_paths_to_sys(hypes)
-    hypes['dirs']['base_path'] = os.path.realpath(logdir)
     hypes['dirs']['output_dir'] = os.path.realpath(logdir)
     hypes['dirs']['image_dir'] = os.path.join(hypes['dirs']['output_dir'],
                                               'images')
+
+    if 'TV_DIR_DATA' in os.environ:
+        data_dir = os.environ['TV_DIR_DATA']
+    else:
+        data_dir = 'DATA'
+
+    hypes['dirs']['data_dir'] = data_dir
 
     return hypes
 
