@@ -28,6 +28,24 @@ flags.DEFINE_string('gpus', None,
                     ('Which gpus to use. For multiple GPUs use comma seperated'
                      'ids. [e.g. --gpus 0,3]'))
 
+def download(url, dest_directory):
+    filename = url.split('/')[-1]
+    filepath = os.path.join(dest_directory, filename)
+
+    logging.info("Download URL: {}".format(url))
+    logging.info("Download DIR: {}".format(dest_directory))
+
+    def _progress(count, block_size, total_size):
+                prog = float(count * block_size) / float(total_size) * 100.0
+                sys.stdout.write('\r>> Downloading %s %.1f%%' %
+                                 (filename, prog))
+                sys.stdout.flush()
+
+    filepath, _ = urllib.request.urlretrieve(url, filepath,
+                                             reporthook=_progress)
+    print()
+    return filepath
+
 
 def print_eval_dict(eval_dict, prefix=''):
     for name, value in eval_dict:
