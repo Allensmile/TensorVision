@@ -17,6 +17,8 @@ import scipy.misc
 import sys
 import struct
 
+from six.moves import urllib
+
 import tensorflow as tf
 
 # Basic model parameters as external flags.
@@ -27,6 +29,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('gpus', None,
                     ('Which gpus to use. For multiple GPUs use comma seperated'
                      'ids. [e.g. --gpus 0,3]'))
+
 
 def download(url, dest_directory):
     filename = url.split('/')[-1]
