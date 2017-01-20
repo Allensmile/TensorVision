@@ -98,7 +98,7 @@ def build_training_graph(hypes, queue, modules):
         eval_list = objective.evaluation(
             hypes, image, labels, decoded_logits, losses, global_step)
 
-        summary_op = tf.merge_all_summaries()
+        summary_op = tf.summary.merge_all()
 
     graph = {}
     graph['losses'] = losses
@@ -149,7 +149,7 @@ def start_tv_session(hypes):
         (sess, saver, summary_op, summary_writer, threads)
     """
     # Build the summary operation based on the TF collection of Summaries.
-    summary_op = tf.merge_all_summaries()
+    summary_op = tf.summary.merge_all()
 
     # Create a saver for writing training checkpoints.
     if 'keep_checkpoint_every_n_hours' in hypes['solver']:
@@ -163,7 +163,7 @@ def start_tv_session(hypes):
     sess = tf.Session()
 
     # Run the Op to initialize the variables.
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
     sess.run(init)
 
     # Start the queue runners.
@@ -171,8 +171,8 @@ def start_tv_session(hypes):
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
     # Instantiate a SummaryWriter to output summaries and the Graph.
-    summary_writer = tf.train.SummaryWriter(hypes['dirs']['output_dir'],
-                                            graph=sess.graph)
+    summary_writer = tf.summary.FileWriter(hypes['dirs']['output_dir'],
+                                           graph=sess.graph)
 
     tv_session = {}
     tv_session['sess'] = sess
