@@ -81,6 +81,9 @@ def do_analyze(logdir):
 
         output_dir = os.path.join(logdir, 'analyse')
 
+        logging.info("Output Images will be written to: {}".format(
+            os.path.join(output_dir, "images/")))
+
         logging_file = os.path.join(logdir, "analyse/output.log")
         utils.create_filewrite_handler(logging_file)
 
@@ -91,7 +94,6 @@ def do_analyze(logdir):
 
         utils.print_eval_dict(eval_dict)
         _write_images_to_logdir(images, output_dir)
-        logging.info("Output is written to: %s" % output_dir)
 
 
 # Utility functions for analyzing models

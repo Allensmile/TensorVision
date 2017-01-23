@@ -140,7 +140,7 @@ def _write_images_to_summary(images, summary_writer, step):
         image = image.reshape(1, shape[0], shape[1], shape[2])
         with tf.Graph().as_default():
             with tf.device('/cpu:0'):
-                log_image = tf.image_summary(name, image)
+                log_image = tf.summary.image(name, image)
             with tf.Session() as sess:
                 summary_str = sess.run([log_image])
                 summary_writer.add_summary(summary_str[0], step)
