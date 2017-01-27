@@ -428,6 +428,11 @@ def continue_training(logdir):
         sess = tv_sess['sess']
         saver = tv_sess['saver']
 
+        logging_file = os.path.join(logdir, 'output.log')
+        utils._create_filewrite_handler(logging_file, mode='a')
+
+        logging.info("Continue training.")
+
         cur_step = core.load_weights(logdir, sess, saver)
         if cur_step is None:
             logging.warning("Loaded global_step is None.")
