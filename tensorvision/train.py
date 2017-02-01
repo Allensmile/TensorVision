@@ -429,7 +429,7 @@ def continue_training(logdir):
         saver = tv_sess['saver']
 
         logging_file = os.path.join(logdir, 'output.log')
-        utils._create_filewrite_handler(logging_file, mode='a')
+        utils.create_filewrite_handler(logging_file, mode='a')
 
         logging.info("Continue training.")
 
