@@ -46,7 +46,7 @@ def _write_images_to_logdir(images, logdir):
         scp.misc.imsave(save_file, image)
 
 
-def do_analyze(logdir, basepath=None):
+def do_analyze(logdir, base_path=None):
     """
     Analyze a trained model.
 
@@ -61,8 +61,8 @@ def do_analyze(logdir, basepath=None):
     hypes = utils.load_hypes_from_logdir(logdir)
     modules = utils.load_modules_from_logdir(logdir)
 
-    if basepath is not None:
-        hypes['dirs']['base_path'] = basepath
+    if base_path is not None:
+        hypes['dirs']['base_path'] = base_path
 
     # Tell TensorFlow that the model will be built into the default Graph.
     with tf.Graph().as_default():
