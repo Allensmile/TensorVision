@@ -230,7 +230,7 @@ def load_modules_from_logdir(logdir, dirname="model_files", postfix=""):
     return modules
 
 
-def load_hypes_from_logdir(logdir, subdir="model_files"):
+def load_hypes_from_logdir(logdir, subdir="model_files", base_path=None):
     """Load hypes from the logdir.
 
     Namely the modules loaded are:
@@ -250,10 +250,15 @@ def load_hypes_from_logdir(logdir, subdir="model_files"):
     with open(hypes_fname, 'r') as f:
         logging.info("f: %s", f)
         hypes = json.load(f)
-    _add_paths_to_sys(hypes)
+
     hypes['dirs']['output_dir'] = os.path.realpath(logdir)
     hypes['dirs']['image_dir'] = os.path.join(hypes['dirs']['output_dir'],
                                               'images')
+
+    if base_path is not None:
+        hypes['dirs']['base_path'] = os.path.realpath(base_path)
+
+    _add_paths_to_sys(hypes)
 
     if 'TV_DIR_DATA' in os.environ:
         data_dir = os.environ['TV_DIR_DATA']
